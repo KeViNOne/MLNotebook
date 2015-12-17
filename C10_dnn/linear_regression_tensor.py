@@ -53,9 +53,18 @@ class LinearRegression(object):
 	def compute(self, x):
 		return T.dot(x, self.W) + self.b
 	
-	def error(self, x, y):
-		return T.mean(0.5 * T.power((T.dot(x, self.W) + self.b).ravel() - y, 2))
-		
+	def error(self, y, z):
+		return 0.5 * T.power(z - y, 2)
+	
+	def grad(self, y, z):
+		return z - y
+	
+	def delta(self, g, x):
+		return T.dot(g, x) / x.shape[0], T.mean(g)
+	
+	def loss(self, e):
+		return T.mean(e)
+	
 
 class LinearRegressionTrainer(object):
 	def __init__(self, train_data, m, n, regression = None):
@@ -69,63 +78,26 @@ class LinearRegressionTrainer(object):
 		pass
 		
 	def train(self, epochs = 1000, learning_rate = 0.1):
-		regression = self.regression
-		X = self.X
-		Y = self.Y
-		
-		x = T.matrix('x')  # data, presented as rasterized images
-		y = T.vector('y')  # labels, presented as 1D vector of [int] labels
-		
-		error = regression.error(x, y)
-		g_W = T.grad(cost=error, wrt=regression.W)
-		g_b = T.grad(cost=error, wrt=regression.b)
-		
-		# start-snippet-3
-		# specify how to update the parameters of the model as a list of
-		# (variable, update expression) pairs.
-		updates = [(regression.W, regression.W - learning_rate * g_W),
-					(regression.b, regression.b - learning_rate * g_b)]
-		
-		# compiling a Theano function `train_model` that returns the cost, but in
-		# the same time updates the parameter of the model based on the rules
-		# defined in `updates`
-		train_model = tn.function(
-			inputs=[],
-			outputs=error,
-			updates=updates,
-			givens={
-				x: X,
-				y: Y
-			}
-		)
-		
-		print('training start:')
+		z = regression.compute(data_x).ravel()
+		e = regression.error(data_y, z)
+		l = regression.loss(e)
+		print('training start (loss: {0}):'.format(l.eval()))
 		start_time = timeit.default_timer()
 		epoch = 0
 		while(epoch < epochs):
-			avg_error = train_model()
-			print('epoch {0}, error {1}'.format(epoch, avg_error), end='\r')
+			g = regression.grad(data_y, z)
+			d = regression.delta(g, data_x)
+			regression.W -= learning_rate * d[0]
+			regression.b -= learning_rate * d[1]
+			
+			z = regression.compute(data_x).ravel()
+			e = regression.error(data_y, z)
+			l = regression.loss(e)
+			# print(l.eval())
+			
 			epoch += 1
-		print('training finish (start: {0}) took {1} seconds.'.format(regression.error(X, Y).eval(), timeit.default_timer() - start_time))
-		
-		
-		# z = regression.compute(data_x).ravel()
-		# e = regression.error(data_y, z)
-		# l = regression.loss(e)
-		# epoch = 0
-		# while(epoch < epochs):
-		# 	g = regression.grad(data_y, z)
-		# 	d = regression.delta(g, data_x)
-		# 	regression.W -= learning_rate * d[0]
-		# 	regression.b -= learning_rate * d[1]
-		# 	
-		# 	z = regression.compute(data_x).ravel()
-		# 	e = regression.error(data_y, z)
-		# 	l = regression.loss(e)
-		# 	# print(l.eval())
-		# 	
-		# 	epoch += 1
-		# 	print('epoch:', epoch, end='\r')
+			print('epoch:', epoch, end='\r')
+		print('training finish (loss: {0}) took {1} seconds.'.format(l.eval(), timeit.default_timer() - start_time))
 		
 		pass
 	

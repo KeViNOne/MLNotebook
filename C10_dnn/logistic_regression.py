@@ -8,7 +8,7 @@ import theano as tn
 
 
 
-class LinearRegression(object):
+class LogisticRegression(object):
 
 	"""线性回归
 
@@ -37,7 +37,7 @@ class LinearRegression(object):
 		pass
 	
 	def compute(self, x):
-		return np.dot(x, self.W) + self.b
+		return (1 + tn.exp(np.dot(x, self.W) + self.b))
 	
 	def error(self, y, z):
 		return 0.5 * ((z - y) ** 2)
@@ -50,6 +50,42 @@ class LinearRegression(object):
 	
 	def loss(self, e):
 		return np.mean(e)
+	
+
+class LogisticRegressionTrainer(object):
+	def __init__(self, train_data, m, n, regression = None):
+		self.X, self.Y = train_data
+		self.m = m
+		self.n_in = n
+		self.n_out = 1
+		
+		self.regression = regression if regression != None else LinearRegression(self.n_in, self.n_out)
+		
+		pass
+	
+	def train(self, epochs = 1000, learning_rate = 0.1):
+		z = regression.compute(data_x).ravel()
+		e = regression.error(data_y, z)
+		l = regression.loss(e)
+		print('training start (loss: {0}):'.format(l.eval()))
+		start_time = timeit.default_timer()
+		epoch = 0
+		while(epoch < epochs):
+			g = regression.grad(data_y, z)
+			d = regression.delta(g, data_x)
+			regression.W -= learning_rate * d[0]
+			regression.b -= learning_rate * d[1]
+			
+			z = regression.compute(data_x).ravel()
+			e = regression.error(data_y, z)
+			l = regression.loss(e)
+			# print(l.eval())
+			
+			epoch += 1
+			print('epoch:', epoch, end='\r')
+		print('training finish (loss: {0}) took {1} seconds.'.format(l.eval(), timeit.default_timer() - start_time))
+		
+		pass
 	
 
 def load_data(data_filename):

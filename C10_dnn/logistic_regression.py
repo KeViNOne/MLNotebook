@@ -6,11 +6,13 @@ import pickle
 import numpy as np
 import theano as tn
 
+import dataset
+
 
 
 class LogisticRegression(object):
 
-	"""线性回归
+	"""逻辑斯谛回归
 
 	"""
 
@@ -37,19 +39,22 @@ class LogisticRegression(object):
 		pass
 	
 	def compute(self, x):
-		return (1 + tn.exp(np.dot(x, self.W) + self.b))
+		return 1 / (1 + np.exp(-(np.dot(x, self.W) + self.b)))
 	
 	def error(self, y, z):
-		return 0.5 * ((z - y) ** 2)
+		one = y * np.log(z)
+		two = (1 - y) * np.log(1 - z)
+		three = (one + two)
+		three[np.isnan(three)] = 0
+		# print(three)
+		return -np.mean(three)
 	
 	def grad(self, y, z):
 		return z - y
 	
 	def delta(self, g, x):
-		return np.dot(g, x) / x.shape[0], np.mean(g)
+		return np.dot(g.T, x) / x.shape[0], np.mean(g)
 	
-	def loss(self, e):
-		return np.mean(e)
 	
 
 class LogisticRegressionTrainer(object):
@@ -64,100 +69,49 @@ class LogisticRegressionTrainer(object):
 		pass
 	
 	def train(self, epochs = 1000, learning_rate = 0.1):
-		z = regression.compute(data_x).ravel()
-		e = regression.error(data_y, z)
-		l = regression.loss(e)
-		print('training start (loss: {0}):'.format(l.eval()))
+		x = self.X
+		y = self.Y
+		regression = self.regression
+		
+		print('training start:')
 		start_time = timeit.default_timer()
+		z = regression.compute(x)
+		# e = regression.error(y, z)
+		# print(e)
 		epoch = 0
 		while(epoch < epochs):
-			g = regression.grad(data_y, z)
-			d = regression.delta(g, data_x)
-			regression.W -= learning_rate * d[0]
+			g = regression.grad(y, z)
+			d = regression.delta(g, x)
+			regression.W -= learning_rate * d[0].T
 			regression.b -= learning_rate * d[1]
 			
-			z = regression.compute(data_x).ravel()
-			e = regression.error(data_y, z)
-			l = regression.loss(e)
-			# print(l.eval())
+			z = regression.compute(x)
+			e = regression.error(y, z)
 			
 			epoch += 1
-			print('epoch:', epoch, end='\r')
-		print('training finish (loss: {0}) took {1} seconds.'.format(l.eval(), timeit.default_timer() - start_time))
+			print('epoch {0}, error {1}'.format(epoch, e), end='\r')
+		print('\ntraining finish (error: {0}) took {1} seconds.'.format(e, timeit.default_timer() - start_time))
 		
 		pass
-	
-
-def load_data(data_filename):
-	print('loading data', end=' ')
-	
-	# 处理文件名
-	data_dir, data_file = os.path.split(data_filename)
-	if data_dir == "" and not os.path.isfile(data_filename):
-		# 如果仅为文件名，且该文件不在当前目录中
-		data_filename = os.path.join(
-			os.path.split(__file__)[0],
-			"..",
-			"datasets",
-			data_filename
-		)
-	print('-', data_filename, end=' ')
-	
-	# 加载数据文件
-	with open(data_filename, 'rb') as f:
-		data = np.asarray(pickle.load(f, encoding='bytes'))
-		print('- success')
-		return data
 		
-	print('- failed')
-	pass
-
-def split_data(data, borrow=True):
-	print('spliting data', end=' ')
-
-	data = np.asarray(data, dtype=tn.config.floatX)
-	data_x = data[:, :-1]
-	data_y = data[:, -1]
-	m, n = data.shape
-	
-	print('- success')
-	return (data_x, data_y, m, n - 1)
 
 if __name__ == '__main__':
-	data_file = 'simple_regression.pkl'
-	learning_rate = 0.02
-	epochs = 300
+	data_file = 'simple_binarylabel.pkl'
+	learning_rate = 0.001
+	epochs = 10000
 	
-	data = load_data(data_file)
-	data_x, data_y, m, n = split_data(data)
-	print(data_x.shape, data_y.shape, m, n)
+	# data = load_data(data_file)
+	# data_x, data_y, m, n = split_data(data)
 	
-	regression = LinearRegression(n_in = n, n_out = 1)
+
+	# 加载数据文件
+	data_x, data_y = dataset.load_data_array(data_file)
+	m, n = data_x.shape
+	print('data:', data_x.shape, data_y.shape, m, n)
 	
-	z = regression.compute(data_x).ravel()
-	e = regression.error(data_y, z)
-	# print(e)
-	l = regression.loss(e)
-	print('training start (loss: {0}):'.format(l))
+	regression = LogisticRegression(n_in = n, n_out = 1)
+	trainer = LogisticRegressionTrainer((data_x, data_y), m, n, regression=regression)
 	
-	start_time = timeit.default_timer()
-	epoch = 0
-	while(epoch < epochs):
-		g = regression.grad(data_y, z)
-		# print(g)
-		d = regression.delta(g, data_x)
-		# print(d[0], d[1])
-		regression.W -= learning_rate * d[0]
-		regression.b -= learning_rate * d[1]
-		
-		z = regression.compute(data_x).ravel()
-		e = regression.error(data_y, z)
-		l = regression.loss(e)
-		
-		epoch += 1
-		print('epoch:', epoch, end='\r')
-	print()
-	
-	print('training finish (loss: {0}) took {1} seconds.'.format(l, timeit.default_timer() - start_time))
+	trainer.train(epochs=epochs, learning_rate=learning_rate)
 	
 	pass

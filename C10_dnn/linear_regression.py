@@ -119,7 +119,7 @@ if __name__ == '__main__':
 		l = regression.loss(e)
 		
 		epoch += 1
-		print('epoch:', epoch, end='\r')
+		print('epoch {0}, error {1}'.format(epoch, l), end='\r')
 	print()
 	
 	print('training finish (loss: {0}) took {1} seconds.'.format(l, timeit.default_timer() - start_time))

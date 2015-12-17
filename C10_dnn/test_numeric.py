@@ -8,6 +8,9 @@ import theano.tensor as T
 rng = np.random.RandomState(round(time.time()))
 
 # 定义向量
+# 转置等价于转之前
+# *运算符乘法：始终作为列向量，自动广播
+# dot乘法：自动在左当行，在右当列
 B = np.array(
             rng.uniform(low=-1, high=1, size=(2,)),
             dtype='float32'

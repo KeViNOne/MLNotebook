@@ -21,9 +21,9 @@ def numerica(data, start = 0, iset = set()):
 	return data;
 
 if __name__ == '__main__':
-	txt = read_csv('./datasets/simple_multilabel.csv')
-	data = numerica(txt, iset = {2})
-	with open('./datasets/simple_multilabel.pkl', 'wb') as file:
+	txt = read_csv('./datasets/simple_regression.csv')
+	data = numerica(txt)
+	with open('./datasets/simple_regression.pkl', 'wb') as file:
 		pickle.dump(data, file)
 	
 	pass

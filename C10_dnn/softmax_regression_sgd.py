@@ -10,7 +10,7 @@ import theano as tn
 import theano.tensor as T
 
 
-class LogisticRegression(object):
+class SoftmaxRegression(object):
 
 	"""逻辑斯谛回归
 
@@ -56,25 +56,21 @@ class LogisticRegression(object):
 		pass
 	
 	def compute(self, x):
-		return T.nnet.sigmoid(T.dot(x, self.W) + self.b)
+		return T.nnet.softmax(T.dot(x, self.W) + self.b)
 	
 	def error(self, x, y):
-		z = self.compute(x).ravel()
-		one = y * T.log(z)
-		two = (1 - y) * T.log(1 - z)
-		three = one + two
-		# three[T.isnan(three)] = 0
-		return -T.mean(three)
+		z = self.compute(x)
+		return -T.mean(T.log(z)[T.arange(z.shape[0]),y])
 		
 
-class LogisticRegressionTrainer(object):
-	def __init__(self, train_data, m, n, regression = None):
+class SoftmaxRegressionTrainer(object):
+	def __init__(self, train_data, m, n, k, regression = None):
 		self.X, self.Y = train_data
 		self.m = m
 		self.n_in = n
-		self.n_out = 1
+		self.n_out = k
 		
-		self.regression = regression if regression != None else LogisticRegression(self.n_in, self.n_out)
+		self.regression = regression if regression != None else SoftmaxRegression(self.n_in, self.n_out)
 		
 		pass
 		
@@ -103,35 +99,38 @@ class LogisticRegressionTrainer(object):
 			}
 		)
 		
-		print('training start:')
 		start_time = timeit.default_timer()
+		e = train_model()
+		print('training start  (error: {0})'.format(e))
 		epoch = 0
 		while(epoch < epochs):
-			avg_error = train_model()
+			e = train_model()
 			epoch += 1
-			print('epoch {0}, error {1}'.format(epoch, avg_error), end='\r')
-		print('\ntraining finish (error: {0}) took {1} seconds.'.format(regression.error(X, Y).eval(), timeit.default_timer() - start_time))
+			print('epoch {0}, error {1}'.format(epoch, e), end='\r')
+		print('training finish (error: {0})'.format(regression.error(X, Y).eval()))
+		print('{0} epochs took {1} seconds.'.format(epoch, timeit.default_timer() - start_time))
 		
 		pass
 	
 
 if __name__ == '__main__':
-	data_file = 'simple_binarylabel.pkl'
-	learning_rate = 0.001
+	data_file = 'simple_multilabel.pkl'
+	learning_rate = 0.0006
 	epochs = 10000
 	borrow = True
 	
 	data = dataset.load_data_array(data_file)
 	m, n = data[0].shape
-	print('data:', data[0].shape, data[1].shape, m, n)
+	k = np.max(data[1]) + 1
+	print('data:', data[0].shape, data[1].shape, m, n, k)
 	
 	train_x = tn.shared(data[0].astype(tn.config.floatX), borrow=borrow)
 	train_y = tn.shared(data[1].astype(np.int32), borrow=borrow)
 	data = None
 	
-	regression = LogisticRegression(n_in = n, n_out = 1)
+	regression = SoftmaxRegression(n_in = n, n_out = k)
 	
-	trainer = LogisticRegressionTrainer((train_x,train_y), m, n, regression=regression)
+	trainer = SoftmaxRegressionTrainer((train_x,train_y), m, n, k, regression=regression)
 	trainer.train(epochs=epochs, learning_rate=learning_rate)
 	
 	pass

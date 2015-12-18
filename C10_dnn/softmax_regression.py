@@ -10,7 +10,7 @@ import dataset
 
 
 
-class LogisticRegression(object):
+class SoftmaxRegression(object):
 
 	"""逻辑斯谛回归
 
@@ -29,6 +29,9 @@ class LogisticRegression(object):
 
 		"""
 		
+		self.n_in = n_in
+		self.n_out = n_out
+		
 		# 权重矩阵
 		self.W = np.zeros((n_in, n_out), dtype=tn.config.floatX)
 		# 偏置矩阵
@@ -39,32 +42,31 @@ class LogisticRegression(object):
 		pass
 	
 	def compute(self, x):
-		return 1 / (1 + np.exp(-(np.dot(x, self.W) + self.b)))
+		numer = np.exp(np.dot(x, self.W) + self.b)
+		denom = np.sum(numer, 1)
+		numer /= denom[:, np.newaxis]
+		return numer
 	
 	def error(self, y, z):
-		one = y * np.log(z)
-		two = (1 - y) * np.log(1 - z)
-		three = (one + two)
-		three[np.isnan(three)] = 0
-		# print(three)
-		return -np.mean(three)
+		return -np.mean(np.log(z)[np.arange(z.shape[0]),y])
 	
 	def grad(self, y, z):
-		return z - y
+		z[np.arange(z.shape[0]),y] -= 1.0
+		return z
 	
 	def delta(self, g, x):
 		return np.dot(g.T, x) / x.shape[0], np.mean(g)
 	
 	
 
-class LogisticRegressionTrainer(object):
-	def __init__(self, train_data, m, n, regression = None):
+class SoftmaxRegressionTrainer(object):
+	def __init__(self, train_data, m, n, k, regression = None):
 		self.X, self.Y = train_data
 		self.m = m
 		self.n_in = n
-		self.n_out = 1
+		self.n_out = k
 		
-		self.regression = regression if regression != None else LogisticRegression(self.n_in, self.n_out)
+		self.regression = regression if regression != None else SoftmaxRegression(self.n_in, self.n_out)
 		
 		pass
 	
@@ -73,39 +75,43 @@ class LogisticRegressionTrainer(object):
 		y = self.Y
 		regression = self.regression
 		
-		print('training start:')
 		start_time = timeit.default_timer()
-		z = regression.compute(x).ravel()
-		# e = regression.error(y, z)
-		# print(e)
+		z = regression.compute(x)
+		# print(z)
+		e = regression.error(y, z)
+		print('training start  (error: {0})'.format(e))
 		epoch = 0
 		while(epoch < epochs):
 			g = regression.grad(y, z)
+			# print(g)
 			d = regression.delta(g, x)
-			regression.W -= learning_rate * d[0][:, np.newaxis]
+			# print(d)
+			regression.W -= learning_rate * d[0].T
 			regression.b -= learning_rate * d[1]
 			
-			z = regression.compute(x).ravel()
+			z = regression.compute(x)
 			e = regression.error(y, z)
 			
 			epoch += 1
 			print('epoch {0}, error {1}'.format(epoch, e), end='\r')
-		print('\ntraining finish (error: {0}) took {1} seconds.'.format(e, timeit.default_timer() - start_time))
+		print('training finish (error: {0})'.format(e))
+		print('{0} epochs took {1} seconds.'.format(epoch, timeit.default_timer() - start_time))
 		
 		pass
 		
-
+# 0.9050887373997508
 if __name__ == '__main__':
-	data_file = 'simple_binarylabel.pkl'
-	learning_rate = 0.001
+	data_file = 'simple_multilabel.pkl'
+	learning_rate = 0.0005
 	epochs = 10000
 	
 	data_x, data_y = dataset.load_data_array(data_file)
 	m, n = data_x.shape
-	print('data:', data_x.shape, data_y.shape, m, n)
+	k = np.max(data_y) + 1
+	print('data:', data_x.shape, data_y.shape, m, n, k)
 	
-	regression = LogisticRegression(n_in = n, n_out = 1)
-	trainer = LogisticRegressionTrainer((data_x, data_y), m, n, regression=regression)
+	regression = SoftmaxRegression(n_in = n, n_out = k)
+	trainer = SoftmaxRegressionTrainer((data_x, data_y), m, n, k, regression=regression)
 	
 	trainer.train(epochs=epochs, learning_rate=learning_rate)
 	

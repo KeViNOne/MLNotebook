@@ -10,10 +10,10 @@ if __name__ == '__main__':
 	data = np.loadtxt(filename + csv_ext, delimiter=',')
 	m, n = data.shape
 	
-	data_x = np.array(data[:,:-1], copy=True)
-	data_y = np.array(data[:,-1].reshape((m,1)), copy=True)
+	data_x = np.array(data[:,:-1], dtype=np.float, copy=True)
+	data_y = np.array(data[:,-1], dtype=np.int, copy=True)
 	
-	with open('./datasets/simple_binarylabel.pkl', 'wb') as file:
+	with open(filename + pkl_ext, 'wb') as file:
 		pickle.dump((data_x, data_y), file)
 	
 	pass

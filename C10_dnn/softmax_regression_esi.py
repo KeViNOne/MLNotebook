@@ -32,26 +32,28 @@ class SoftmaxRegression(object):
 		self.n_in = n_in
 		self.n_out = n_out
 		
+		self.W_value = np.zeros((n_in, n_out),dtype=tn.config.floatX)
+		self.b_value = np.zeros((n_out,),dtype=tn.config.floatX)
+		
+		self.setParam((self.W_value, self.b_value))
+		pass
+	
+	def setParam(self, param):
+		
 		# 权重矩阵
 		self.W = tn.shared(
-			value=np.zeros(
-				(n_in, n_out),
-				dtype=tn.config.floatX
-			),
+			value=param[0],
 			name='W',
 			borrow=True
 		)
 		# 偏置矩阵
 		self.b = tn.shared(
-			value=np.zeros(
-				(n_out,),
-				dtype=tn.config.floatX
-			),
+			value=param[1],
 			name='b',
 			borrow=True
 		)
 		# 全部模型参数
-		self.theta = [self.W, self.b]
+		self.param = [self.W, self.b]
 		
 		pass
 	
@@ -61,7 +63,11 @@ class SoftmaxRegression(object):
 	def error(self, x, y):
 		z = self.compute(x)
 		return -T.mean(T.log(z)[T.arange(z.shape[0]),y])
-		
+	
+	def precision(self, x, y):
+		z = self.compute(x)
+		l = T.argmax(z, axis=1)
+		return T.mean(T.eq(l, y))
 
 class SoftmaxRegressionTrainer(object):
 	def __init__(self, train_data, m, n, k, regression = None):
@@ -74,10 +80,9 @@ class SoftmaxRegressionTrainer(object):
 		
 		pass
 		
-	def train(self, epochs = 1000, learning_rate = 0.1):
+	def train(self, epochs = 1000, learning_rate = 0.1, valid_ratio = False):
 		regression = self.regression
-		X = self.X
-		Y = self.Y
+		train_x, train_y, train_m, valid_x, valid_y, valid_m = self.split_data(valid_ratio)
 		
 		x = T.fmatrix('x')  # data, presented as rasterized images
 		y = T.ivector('y')  # labels, presented as 1D vector of [int] labels
@@ -86,38 +91,72 @@ class SoftmaxRegressionTrainer(object):
 		g_W = T.grad(cost=error, wrt=regression.W)
 		g_b = T.grad(cost=error, wrt=regression.b)
 		
-		updates = [(regression.W, regression.W - learning_rate * g_W),
+		update = [(regression.W, regression.W - learning_rate * g_W),
 					(regression.b, regression.b - learning_rate * g_b)]
 		
-		train_model = tn.function(
+		iterate = tn.function(
 			inputs=[],
-			outputs=error,
-			updates=updates,
+			outputs=None,
+			updates=update,
 			givens={
-				x: X,
-				y: Y
+				x: train_x,
+				y: train_y
 			}
 		)
 		
+		
 		start_time = timeit.default_timer()
-		e = train_model()
-		print('training start  (error: {0})'.format(e))
+		patience = 5
+		up = 0
 		epoch = 0
-		while(epoch < epochs):
-			e = train_model()
+		frequency = 100
+		best_validation = regression.error(valid_x, valid_y).eval()
+		best_param = (regression.W.eval(), regression.b.eval())
+		print('training start  (error: {0})'.format(best_validation))
+		while(epoch < epochs and up < patience):
+			iterate()
 			epoch += 1
-			print('epoch {0}, error {1}'.format(epoch, e), end='\r')
-		print('training finish (error: {0})'.format(regression.error(X, Y).eval()))
+			if(epoch % frequency == 0):
+				validation = regression.error(valid_x, valid_y).eval()
+				print('epoch {0}, error {1}'.format(epoch, validation), end='\r')
+				if(validation < best_validation):
+					best_validation = validation
+					best_param = (regression.W.eval(), regression.b.eval())
+					up = 0
+				else:
+					up += 1
+		regression.setParam(best_param)
+		print('training finish (error: {0})'.format(best_validation))
 		print('{0} epochs took {1} seconds.'.format(epoch, timeit.default_timer() - start_time))
 		
 		pass
 	
+		
+	def split_data(self, valid_ratio):
+		valid_m = int(self.m * valid_ratio)
+		train_m = self.m - valid_m
+		
+		pick = np.random.choice(self.m, self.m, replace=False)
+		rand_x = self.X[pick,:]
+		rand_y = self.Y[pick,:]
+		
+		train_x = rand_x[0:train_m, :] 
+		train_y = rand_y[0:train_m]
+		valid_x = rand_x[train_m:, :] 
+		valid_y = rand_y[train_m:]
+		
+		print(train_x.eval().shape, valid_x.eval().shape)
+		
+		return train_x, train_y, train_m, valid_x, valid_y, valid_m
+	
 
 if __name__ == '__main__':
 	data_file = 'simple_multilabel.pkl'
-	learning_rate = 0.0006
+	learning_rate = 0.0001
 	epochs = 10000
 	borrow = True
+	
+
 	
 	data = dataset.load_data_array(data_file)
 	m, n = data[0].shape
@@ -131,6 +170,6 @@ if __name__ == '__main__':
 	regression = SoftmaxRegression(n_in = n, n_out = k)
 	
 	trainer = SoftmaxRegressionTrainer((train_x,train_y), m, n, k, regression=regression)
-	trainer.train(epochs=epochs, learning_rate=learning_rate)
+	trainer.train(epochs=epochs, learning_rate=learning_rate, valid_ratio=0.2)
 	
 	pass

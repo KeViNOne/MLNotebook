@@ -9,7 +9,6 @@ import theano as tn
 import dataset
 
 
-
 class SoftmaxRegression(object):
 
 	"""逻辑斯谛回归
@@ -32,12 +31,18 @@ class SoftmaxRegression(object):
 		self.n_in = n_in
 		self.n_out = n_out
 		
+		self.setParam((np.zeros((n_in, n_out),dtype=tn.config.floatX), np.zeros((n_out,),dtype=tn.config.floatX)))
+		
+		pass
+	
+	def setParam(self, param):
+		
 		# 权重矩阵
-		self.W = np.zeros((n_in, n_out), dtype=tn.config.floatX)
+		self.W = param[0]
 		# 偏置矩阵
-		self.b = np.zeros((n_out,), dtype=tn.config.floatX)
+		self.b = param[1]
 		# 全部模型参数
-		self.theta = [self.W, self.b]
+		self.param = [self.W, self.b]
 		
 		pass
 	
@@ -47,7 +52,7 @@ class SoftmaxRegression(object):
 		numer /= denom[:, np.newaxis]
 		return numer
 	
-	def error(self, y, z):
+	def loss(self, y, z):
 		return -np.mean(np.log(z)[np.arange(z.shape[0]),y])
 	
 	def grad(self, y, z):
@@ -57,7 +62,9 @@ class SoftmaxRegression(object):
 	def delta(self, g, x):
 		return np.dot(g.T, x) / x.shape[0], np.mean(g)
 	
-	
+	def error(self, y, z):
+		l = np.argmax(z, axis=1)
+		return np.nonzero(l - y)[0].shape[0] / y.shape[0]
 
 class SoftmaxRegressionTrainer(object):
 	def __init__(self, train_data, m, n, k, regression = None):
@@ -77,15 +84,12 @@ class SoftmaxRegressionTrainer(object):
 		
 		start_time = timeit.default_timer()
 		z = regression.compute(x)
-		# print(z)
 		e = regression.error(y, z)
-		print('training start  (error: {0})'.format(e))
+		print('training start  (error: {0:.4%})'.format(e))
 		epoch = 0
 		while(epoch < epochs):
 			g = regression.grad(y, z)
-			# print(g)
 			d = regression.delta(g, x)
-			# print(d)
 			regression.W -= learning_rate * d[0].T
 			regression.b -= learning_rate * d[1]
 			
@@ -93,26 +97,73 @@ class SoftmaxRegressionTrainer(object):
 			e = regression.error(y, z)
 			
 			epoch += 1
-			print('epoch {0}, error {1}'.format(epoch, e), end='\r')
-		print('training finish (error: {0})'.format(e))
-		print('{0} epochs took {1} seconds.'.format(epoch, timeit.default_timer() - start_time))
+			print('epoch {0}, error {1:.4%}'.format(epoch, e), end='\r')
+		escape_time = timeit.default_timer() - start_time
+		print('training finish (error: {0:.4%})'.format(e))
+		if(escape_time > 300.):
+			print('{0} epochs took {1:.2f} minutes.'.format(epoch, escape_time / 60.))
+		else:
+			print('{0} epochs took {1:.2f} seconds.'.format(epoch, escape_time))
 		
 		pass
 		
-# 0.9050887373997508
+
 if __name__ == '__main__':
-	data_file = 'simple_multilabel.pkl'
-	learning_rate = 0.0005
-	epochs = 10000
+	data_file = 'mnist.pkl.gz'
+	learning_rate = 0.1
+	epochs = 1000
+	borrow = True
 	
-	data_x, data_y = dataset.load_data_array(data_file)
-	m, n = data_x.shape
-	k = np.max(data_y) + 1
-	print('data:', data_x.shape, data_y.shape, m, n, k)
+	data = dataset.load(data_file, True)
+	train_set = data[0]
+	m, n = train_set[0].shape
+	k = np.max(train_set[1]) + 1
+	print('data:', train_set[0].shape, train_set[1].shape, m, n, k)
+	
 	
 	regression = SoftmaxRegression(n_in = n, n_out = k)
-	trainer = SoftmaxRegressionTrainer((data_x, data_y), m, n, k, regression=regression)
 	
-	trainer.train(epochs=epochs, learning_rate=learning_rate)
+	trainer = SoftmaxRegressionTrainer(
+		train_set, 
+		m, n, k,
+		regression = regression
+	)
+	
+	del data
+	del train_set
+	
+	trainer.train(
+		epochs = epochs, 
+		learning_rate = learning_rate
+	)
+	
+	pass
+
+if __name__ == '__debug__':
+	data_file = 'mnist.pkl'
+	learning_rate = 0.0004
+	epochs = 10000
+	borrow = True
+	
+	data = dataset.load(data_file)
+	m, n = data[0].shape
+	k = np.max(data[1]) + 1
+	print('data:', data[0].shape, data[1].shape, m, n, k)
+	
+	train_x, train_y = data
+	del data
+	
+	regression = SoftmaxRegression(n_in = n, n_out = k)
+	
+	trainer = SoftmaxRegressionTrainer(
+		(train_x, train_y), 
+		m, n, k,
+		regression = regression
+	)
+	
+	trainer.train(
+		epochs = epochs, 
+		learning_rate = learning_rate
+	)
 	
 	pass

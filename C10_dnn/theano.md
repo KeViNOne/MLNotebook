@@ -59,3 +59,53 @@ zcol		complex128	2	(?,1)	(False, True)
 zmatrix		complex128	2	(?,?)	(False, False)
 ztensor3	complex128	3	(?,?,?)	(False, False, False)
 ztensor4	complex128	4	(?,?,?,?)	(False, False, False, False)
+
+
+
+(DL) xuqian@severA914:~$ python Experiments/MLNotebook/C10_dnn/softmax_regression.py
+Using gpu device 0: Tesla K20c
+loading data - /home/xuqian/Experiments/MLNotebook/C10_dnn/../datasets/mnist.pkl.gz - success
+data: (50000, 784) (50000,) 50000 784 10
+training start  (error: 90.1360%)
+training finish (error: 9.8280%)
+1000 epochs took 246.38 seconds.
+
+(DL) xuqian@severA914:~$ python Experiments/MLNotebook/C10_dnn/softmax_regression_theano.py
+Using gpu device 0: Tesla K20c
+loading data - /home/xuqian/Experiments/MLNotebook/C10_dnn/../datasets/mnist.pkl.gz - success
+data: (50000, 784) (50000,) 50000 784 10
+training start  (error: 90.1360%)
+training finish (error: 9.7360%)
+1000 epochs took 24.42 seconds.
+
+(DL) xuqian@severA914:~$ python Experiments/MLNotebook/C10_dnn/softmax_regression_esi.py
+Using gpu device 0: Tesla K20c
+loading data - /home/xuqian/Experiments/MLNotebook/C10_dnn/../datasets/mnist.pkl.gz - success
+data: (50000, 784) (50000,) 50000 784 10
+training start  (error: 90.0900%)
+training finish (error: 8.2300%)
+4000 epochs took 70.34 seconds.
+
+(DL) xuqian@severA914:~$ python Experiments/MLNotebook/C10_dnn/softmax_regression_sgd.py
+Using gpu device 0: Tesla K20c
+loading data - /home/xuqian/Experiments/MLNotebook/C10_dnn/../datasets/mnist.pkl.gz - success
+data: (50000, 784) (50000,) 50000 784 10
+training start  (error: 90.0900%)
+training finish (error: 7.1500%)
+3500 epochs took 5.75 minutes.
+(DL) xuqian@severA914:~$ python2 Experiments/
+DeepLearningTutorials/ MLNotebook/
+
+(DL) xuqian@severA914:~$ python2 Experiments/DeepLearningTutorials/code/logistic_sgd.py
+Using gpu device 0: Tesla K20c
+... loading data
+... building the model
+... training the model
+epoch 1, minibatch 50/50, validation error 16.390000 %
+     epoch 1, minibatch 50/50, test error of best model 17.280000 %
+...
+epoch 100, minibatch 50/50, validation error 8.100000 %
+     epoch 100, minibatch 50/50, test error of best model 8.170000 %
+Optimization complete with best validation score of 8.100000 %,with test performance 8.170000 %
+The code run for 101 epochs, with 9.802333 epochs/sec
+The code for file logistic_sgd.py ran for 10.3s

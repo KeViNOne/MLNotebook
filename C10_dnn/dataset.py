@@ -1,9 +1,10 @@
 import os
+import gzip
 import pickle
 import numpy as np
 
 
-def load_data_array(data_filename):
+def load(data_filename, zip = False):
 	print('loading data', end=' ')
 	
 	# 处理文件名
@@ -19,10 +20,43 @@ def load_data_array(data_filename):
 	print('-', data_filename, end=' ')
 	
 	# 加载数据文件
-	with open(data_filename, 'rb') as f:
+	o = gzip.open if(zip)else open
+	with o(data_filename, 'rb') as f:
 		data = pickle.load(f, encoding='bytes')
 		print('- success')
 		return data
 		
 	print('- failed')
+	pass
+
+def pick(data, m, random = True):
+	is_tuple = isinstance(data, tuple)
+	if(is_tuple):
+		if(random):
+			rows = np.random.choice(data[0].shape[0], m, replace=False)
+			return tuple(matrix[rows] for matrix in data)
+		else:
+			return tuple(matrix[:m] for matrix in data)
+	else:
+		if(random):
+			rows = np.random.choice(data.shape[0], m, replace=False)
+			return data[rows]
+		else:
+			return data[:m]
+	pass
+
+def split(data, s):
+	is_tuple = isinstance(data, tuple)
+	if isinstance(s, float):
+		rows = data[0].shape[0] if(is_tuple)else data.shape[0]
+		s = int(rows * s)
+	if(is_tuple):
+		ret = list()
+		for matrix in data:
+			ret.append(matrix[:s])
+			ret.append(matrix[s:])
+		return tuple(ret)
+	else:
+		return data[:s], data[s:]
+	
 	pass

@@ -67,9 +67,11 @@ class SoftmaxRegression(object):
 		return 1 - T.mean(T.eq(l, y))
 
 class SoftmaxRegressionTrainer(object):
-	def __init__(self, train_data, m, n, k, regression = None):
+	def __init__(self, train_data, m, n, k, valid_data = None, regression = None):
 		self.train_x = self.share_data(train_data[0], tn.config.floatX)
 		self.train_y = self.share_data(train_data[1], np.int32)
+		self.valid_x = self.share_data(valid_data[0], tn.config.floatX) if(valid_data != None)else self.train_x
+		self.valid_y = self.share_data(valid_data[1], np.int32) if(valid_data != None)else self.train_y
 		
 		self.m = m
 		self.n_in = n
@@ -79,11 +81,14 @@ class SoftmaxRegressionTrainer(object):
 		
 		pass
 	
-	def train(self, epochs = 1000, learning_rate = 0.1):
+	def train(self, epochs = 1000, learning_rate = 0.1, batch_size = None, valid_frequency = 100):
 		regression = self.regression
+		batch_size = int(batch_size) if(batch_size != None and batch_size >= 1 and batch_size < self.m) else self.m
+		batchs = self.m // batch_size
 		
 		x = T.fmatrix('x')  # data, presented as rasterized images
 		y = T.ivector('y')  # labels, presented as 1D vector of [int] labels
+		i = T.iscalar('i')  # index to a batch
         
 		loss = regression.loss(x, y)
 		g_W = T.grad(cost=loss, wrt=regression.W)
@@ -92,28 +97,54 @@ class SoftmaxRegressionTrainer(object):
 					(regression.b, regression.b - learning_rate * g_b)]
 		
 		iterate = tn.function(
-			inputs=[],
-			outputs=loss,
+			inputs=[i],
+			outputs=None,
 			updates=update,
 			givens={
-				x: self.train_x,
-				y: self.train_y
+				x: self.train_x[i * batch_size: (i + 1) * batch_size],
+				y: self.train_y[i * batch_size: (i + 1) * batch_size]
+			}
+		)
+		
+		error = regression.error(x, y)
+		validate = tn.function(
+			inputs=[],
+			outputs=error,
+			givens={
+				x: self.valid_x,
+				y: self.valid_y
 			}
 		)
 		
 		start_time = timeit.default_timer()
+		patience = 5
+		up = 0
 		epoch = 0
-		print('training start  (error: {0:.4%})'.format(float(regression.error(self.train_x, self.train_y).eval())))
-		while(epoch < epochs):
-			e = iterate()
+		frequency = int(valid_frequency) if(valid_frequency != None and valid_frequency >= 1) else 100
+		best_validation = float(validate())
+		best_param = (regression.W.eval(), regression.b.eval())
+		print('training start  (error: {0:.4%})'.format(best_validation))
+		while(epoch < epochs and up < patience):
+			for i in range(batchs):
+				iterate(i)
 			epoch += 1
-			print('epoch {0}, error {1:.6f}'.format(epoch, float(e)), end='\r')
+			if(epoch % frequency == 0):
+				validation = float(validate())
+				print('epoch {0}, error {1:.4%}'.format(epoch, validation), end='\r')
+				if(validation < best_validation):
+					best_validation = validation
+					best_param = (regression.W.eval(), regression.b.eval())
+					up = 0
+				else:
+					up += 1
 		escape_time = timeit.default_timer() - start_time
-		print('training finish (error: {0:.4%})'.format(float(regression.error(self.train_x, self.train_y).eval())))
+		print('training finish (error: {0:.4%})'.format(best_validation))
 		if(escape_time > 300.):
 			print('{0} epochs took {1:.2f} minutes.'.format(epoch, escape_time / 60.))
 		else:
 			print('{0} epochs took {1:.2f} seconds.'.format(epoch, escape_time))
+		
+		regression.setParam(best_param)
 		
 		pass
 	
@@ -123,62 +154,71 @@ class SoftmaxRegressionTrainer(object):
 		return tn.shared(data, borrow=borrow)
 	
 
-if __name__ == '__main__':
+if __name__ == '__run__':
 	data_file = 'mnist.pkl.gz'
-	learning_rate = 0.1
-	epochs = 1000
+	learning_rate = 0.005
+	epochs = 10000
+	batch_size = 500
 	borrow = True
 	
 	data = dataset.load(data_file, True)
-	train_set = data[0]
+	train_set, valid_set, test_set = data
 	m, n = train_set[0].shape
 	k = np.max(train_set[1]) + 1
 	print('data:', train_set[0].shape, train_set[1].shape, m, n, k)
-	
 	
 	regression = SoftmaxRegression(n_in = n, n_out = k)
 	
 	trainer = SoftmaxRegressionTrainer(
 		train_set, 
 		m, n, k,
+		valid_data = valid_set,
 		regression = regression
 	)
 	
-	del data
-	del train_set
+	del(data)
+	del(train_set)
+	del(valid_set)
+	del(test_set)
 	
 	trainer.train(
 		epochs = epochs, 
-		learning_rate = learning_rate
+		learning_rate = learning_rate, 
+		batch_size = batch_size
 	)
 	
 	pass
 
-if __name__ == '__debug__':
+if __name__ == '__main__':
 	data_file = 'mnist.pkl'
-	learning_rate = 0.0004
+	learning_rate = 0.0005
 	epochs = 10000
+	valid_ratio = 0.2
+	batch_size = 200
 	borrow = True
 	
 	data = dataset.load(data_file)
 	m, n = data[0].shape
 	k = np.max(data[1]) + 1
-	print('data:', data[0].shape, data[1].shape, m, n, k)
+	s = int(m * (1 - valid_ratio))
+	print('data:', data[0].shape, data[1].shape, m, n, k, s)
 	
-	train_x, train_y = data
+	train_x, valid_x, train_y, valid_y = dataset.split(dataset.pick(data, m, random = False), s)
 	del data
 	
 	regression = SoftmaxRegression(n_in = n, n_out = k)
 	
 	trainer = SoftmaxRegressionTrainer(
 		(train_x, train_y), 
-		m, n, k,
+		s, n, k,
+		valid_data = (valid_x, valid_y),
 		regression = regression
 	)
 	
 	trainer.train(
 		epochs = epochs, 
-		learning_rate = learning_rate
+		learning_rate = learning_rate, 
+		batch_size = batch_size
 	)
 	
 	pass

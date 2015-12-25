@@ -247,12 +247,12 @@ class MLP(object):
 class LeNet(object):
 
 	def __init__(self, varis = None, activation = T.tanh):
-		self.x = T.matrix('x')
+		self.x = T.tensor4('x')
 		self.y = T.ivector('y')
 		
 		self.activation = activation
-		self.n_in = (4, 4)
-		self.n_out = 2
+		self.n_in = (28, 28)
+		self.n_out = 10
 		self.n_hidden = 500
 		
 		if(varis):
@@ -263,32 +263,27 @@ class LeNet(object):
 		pass
 	
 	def setVars(self, varis):
-		self.x = varis[0] if(len(varis) > 0)else T.matrix('x')
+		self.x = varis[0] if(len(varis) > 0)else T.tensor4('x')
 		self.y = varis[1] if(len(varis) > 1)else T.ivector('y')
 		self.setValues()
 		pass
 	
 	def setValues(self):
-		self.x = self.x.reshape((self.x.shape[0], 1, self.n_in[0], self.n_in[1]))
 		self.layer0 = Conv2DLayer(
 			varis = (self.x,),
-			filter_shape = (2, 1, 2, 2),
-			pool_shape = (2, 2),
-			pool_step = (1, 1),
-			padding = True
+			filter_shape = (20, 1, 5, 5),
+			pool_shape = (2, 2)
 		)
 		self.layer1 = Conv2DLayer(
 			varis = (self.layer0.output,),
-			filter_shape = (3, 2, 2, 2),
-			pool_shape = (2, 2),
-			pool_step = (1, 1),
-			padding = True
+			filter_shape = (50, 20, 5, 5),
+			pool_shape = (2, 2)
 		)
 		self.layer_output = MLP(
 			vars = (self.layer1.output.flatten(2), self.y),
-			n_in = 48,
-			n_out = 2,
-			n_hidden = 100
+			n_in = 800,
+			n_out = 10,
+			n_hidden = 500
 		)
 		
 		self.params = self.layer0.params + self.layer1.params + self.layer_output.params
@@ -298,11 +293,133 @@ class LeNet(object):
 		self.error = self.layer_output.error
 		
 		pass
+	
+
+class LeNetTrainer(object):
+	def __init__(self, train_data, m, v, n, k, h, valid_data = None):
+		self.train_x = self.share_data(train_data[0].reshape((m, 1, 28, 28)), tn.config.floatX)
+		self.train_y = self.share_data(train_data[1], np.int32)
+		self.valid_x = self.share_data(valid_data[0].reshape((v, 1, 28, 28)), tn.config.floatX) if(valid_data != None)else self.train_x
+		self.valid_y = self.share_data(valid_data[1], np.int32) if(valid_data != None)else self.train_y
+		
+		self.m = m
+		self.n_in = n
+		self.n_out = k
+		self.n_hidden = h
+		
+		self.classifier = LeNet()
+		
+		pass
+	
+	def train(self, epochs = 1000, learning_rate = 0.1, batch_size = None, valid_frequency = 100):
+		classifier = self.classifier
+		batch_size = int(batch_size) if(batch_size != None and batch_size >= 1 and batch_size < self.m) else self.m
+		batchs = self.m // batch_size
+		
+		loss = classifier.loss
+		gparams = [T.grad(loss, param) for param in classifier.params]
+		updates = [
+			(param, param - learning_rate * gparam)
+			for param, gparam in zip(classifier.params, gparams)
+		]
+		
+		i = T.iscalar('i')  # index to a batch
+		train = tn.function(
+			inputs=[i],
+			outputs=None,
+			updates=updates,
+			givens={
+				classifier.x: self.train_x[i * batch_size: (i + 1) * batch_size],
+				classifier.y: self.train_y[i * batch_size: (i + 1) * batch_size]
+			}
+		)
+		
+		error = classifier.error
+		validate = tn.function(
+			inputs=[],
+			outputs=error,
+			givens={
+				classifier.x: self.valid_x,
+				classifier.y: self.valid_y
+			}
+		)
+		
+		start_time = time.time()
+		patience = 5
+		up = 0
+		epoch = 0
+		frequency = int(valid_frequency) if(valid_frequency != None and valid_frequency >= 1) else 100
+		best_validation = float(validate())
+		# best_param = (classifier.W.eval(), classifier.b.eval())
+		print('training start  (error: {0:.4%})'.format(best_validation))
+		while(epoch < epochs and up < patience):
+			for i in range(batchs):
+				train(i)
+			epoch += 1
+			if(epoch % frequency == 0):
+				validation = float(validate())
+				print('epoch {0}, error {1:.4%}'.format(epoch, validation))
+				if(validation < best_validation):
+					best_validation = validation
+					# best_param = (classifier.W.eval(), classifier.b.eval())
+					up = 0
+				else:
+					up += 1
+		escape_time = time.time() - start_time
+		print('training finish (error: {0:.4%})'.format(best_validation))
+		if(escape_time > 300.):
+			print('{0} epochs took {1:.2f} minutes.'.format(epoch, escape_time / 60.))
+		else:
+			print('{0} epochs took {1:.2f} seconds.'.format(epoch, escape_time))
+		
+		# classifier.setParam(best_param)
+		
+		pass
+	
+	def share_data(self, data, dtype):
+		if(data.dtype != np.dtype(dtype)):
+			data = data.astype(dtype)
+		return tn.shared(data, borrow=borrow)
+	
 
 if __name__ == '__main__':
+	data_file = 'mnist.pkl.gz'
+	learning_rate = 0.1
+	epochs = 100
+	batch_size = 500
+	borrow = True
+	
+	data = dataset.load(data_file, True)
+	train_set, valid_set, test_set = data
+	m, n = train_set[0].shape
+	k = np.max(train_set[1]) + 1
+	v = valid_set[0].shape[0]
+	print('data:', train_set[0].shape, train_set[1].shape, m, n, k)
+	
+	trainer = LeNetTrainer(
+		train_set, 
+		m, v, n, k, 500,
+		valid_data = valid_set
+	)
+	
+	del(data)
+	del(train_set)
+	del(valid_set)
+	del(test_set)
+	
+	trainer.train(
+		epochs = epochs, 
+		learning_rate = learning_rate, 
+		batch_size = batch_size,
+		valid_frequency = 1
+	)
+	
+	pass
+
+if __name__ == '__debug__':
 	data_file = 'mnist.pkl'
-	learning_rate = 0.001
-	epochs = 10000
+	learning_rate = 0.01
+	epochs = 10
 	valid_ratio = 0.2
 	batch_size = 100
 	borrow = True
@@ -314,45 +431,19 @@ if __name__ == '__main__':
 	print('data:', data[0].shape, data[1].shape, m, n, k, s)
 	
 	train_x, valid_x, train_y, valid_y = dataset.split(dataset.pick(data, m, random = False), s)
-	# del data
+	del data
 	
-	x = np.ones((5,16), dtype=tn.config.floatX)
-	print(x, x.shape)
-	x = tn.shared(x, name='x', borrow=True)
-	y = np.array([0, 1, 0, 1, 0], dtype=np.int32)
-	print(y, y.shape)
-	y = tn.shared(y, name='y', borrow=True)
-	nn = LeNet(varis = (x, y))
-	print(nn.output.eval().shape)
+	trainer = LeNetTrainer(
+		(train_x, train_y), 
+		s, n, k, 500,
+		valid_data = (valid_x, valid_y)
+	)
 	
-	
-	
-	# layer0 = Conv2DLayer(
-	# 	varis = (x,),
-	# 	filter_shape = (2, 1, 2, 2),
-	# 	pool_shape = (2, 2),
-	# 	pool_step = (1, 1),
-	# 	padding = True
-	# )
-	# output0 = layer0.output
-	# print(output0.eval(), output0.eval().shape)
-	# layer1 = Conv2DLayer(
-	# 	varis = (output0,),
-	# 	filter_shape = (3, 2, 2, 2),
-	# 	# pool_shape = (2, 2),
-	# )
-	# output1 = layer1.output.eval()
-	# print(output1, output1.shape)
-	# trainer = MLPTrainer(
-	# 	(train_x, train_y), 
-	# 	s, n, k, 100,
-	# 	valid_data = (valid_x, valid_y)
-	# )
-	# 
-	# trainer.train(
-	# 	epochs = epochs, 
-	# 	learning_rate = learning_rate, 
-	# 	batch_size = batch_size
-	# )
+	trainer.train(
+		epochs = epochs, 
+		learning_rate = learning_rate, 
+		batch_size = batch_size,
+		valid_frequency = 1
+	)
 	
 	pass

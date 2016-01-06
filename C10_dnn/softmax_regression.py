@@ -4,7 +4,7 @@ import timeit
 import pickle
 
 import numpy as np
-import theano as tn
+# import theano as tn
 
 import dataset
 
@@ -31,7 +31,7 @@ class SoftmaxRegression(object):
 		self.n_in = n_in
 		self.n_out = n_out
 		
-		self.setParam((np.zeros((n_in, n_out),dtype=tn.config.floatX), np.zeros((n_out,),dtype=tn.config.floatX)))
+		self.setParam((np.zeros((n_in, n_out),dtype=np.float32), np.zeros((n_out,),dtype=np.float32)))
 		
 		pass
 	
@@ -95,9 +95,10 @@ class SoftmaxRegressionTrainer(object):
 			
 			z = regression.compute(x)
 			e = regression.error(y, z)
+			l = regression.loss(y, z)
 			
 			epoch += 1
-			print('epoch {0}, error {1:.4%}'.format(epoch, e), end='\r')
+			print('epoch {0}, error {1:.6f}'.format(epoch, l), end='\r')
 		escape_time = timeit.default_timer() - start_time
 		print('training finish (error: {0:.4%})'.format(e))
 		if(escape_time > 300.):
@@ -108,10 +109,10 @@ class SoftmaxRegressionTrainer(object):
 		pass
 		
 
-if __name__ == '__main__':
+if __name__ == '__run__':
 	data_file = 'mnist.pkl.gz'
 	learning_rate = 0.1
-	epochs = 1000
+	epochs = 10
 	borrow = True
 	
 	data = dataset.load(data_file, True)
@@ -139,10 +140,10 @@ if __name__ == '__main__':
 	
 	pass
 
-if __name__ == '__debug__':
+if __name__ == '__main__':
 	data_file = 'mnist.pkl'
-	learning_rate = 0.0004
-	epochs = 10000
+	learning_rate = 0.01
+	epochs = 100
 	borrow = True
 	
 	data = dataset.load(data_file)

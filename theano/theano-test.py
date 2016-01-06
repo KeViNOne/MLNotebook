@@ -6,7 +6,7 @@ import numpy
 import time
 
 vlen = 10 * 100 * 1024  # 10 x #cores x # threads per core
-iters = 1000
+iters = 10000
 
 t_ = time.time()
 rng = numpy.random.RandomState(22)

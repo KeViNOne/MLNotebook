@@ -54,12 +54,24 @@ class SoftmaxRegression(object):
 		
 		pass
 	
-	def compute(self, x):
-		return T.nnet.softmax(T.dot(x, self.W) + self.b)
+	# def compute(self, x):
+	# 	return T.nnet.softmax(T.dot(x, self.W) + self.b)
 	
+	def compute(self, x):
+		numer = T.exp(T.dot(x, self.W) + self.b)
+		return numer/numer.sum(1)[:,None]
+	
+	# def compute(self, x):
+	# 	x = T.dot(x, self.W) + self.b
+	# 	ret = x - x.max(axis=1)[:,None]
+	# 	ret = T.exp(ret)
+	# 	return ret/ret.sum(axis=1)[:,None]
+
 	def loss(self, x, y):
 		z = self.compute(x)
-		return -T.mean(T.log(z)[T.arange(z.shape[0]),y])
+		return -T.mean(T.log(z[T.arange(z.shape[0]),y]))
+		# return -T.mean(T.log(z)[T.arange(z.shape[0]),y])
+		# return T.nnet.categorical_crossentropy(z, y).mean()
 	
 	def error(self, x, y):
 		z = self.compute(x)
@@ -90,6 +102,7 @@ class SoftmaxRegressionTrainer(object):
 		g_b = T.grad(cost=loss, wrt=regression.b)
 		update = [(regression.W, regression.W - learning_rate * g_W),
 					(regression.b, regression.b - learning_rate * g_b)]
+		error = regression.error(x, y)
 		
 		iterate = tn.function(
 			inputs=[],
@@ -107,7 +120,7 @@ class SoftmaxRegressionTrainer(object):
 		while(epoch < epochs):
 			e = iterate()
 			epoch += 1
-			print('epoch {0}, error {1:.6f}'.format(epoch, float(e)), end='\r')
+			# print('epoch {0}, error {1:.6f}'.format(epoch, float(e)), end='\r')
 		escape_time = timeit.default_timer() - start_time
 		print('training finish (error: {0:.4%})'.format(float(regression.error(self.train_x, self.train_y).eval())))
 		if(escape_time > 300.):
@@ -123,7 +136,7 @@ class SoftmaxRegressionTrainer(object):
 		return tn.shared(data, borrow=borrow)
 	
 
-if __name__ == '__main__':
+if __name__ == '__run__':
 	data_file = 'mnist.pkl.gz'
 	learning_rate = 0.1
 	epochs = 1000
@@ -154,9 +167,9 @@ if __name__ == '__main__':
 	
 	pass
 
-if __name__ == '__debug__':
+if __name__ == '__main__':
 	data_file = 'mnist.pkl'
-	learning_rate = 0.0004
+	learning_rate = 0.01
 	epochs = 10000
 	borrow = True
 	
